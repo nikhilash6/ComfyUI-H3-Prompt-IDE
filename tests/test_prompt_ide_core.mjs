@@ -5,6 +5,7 @@ import {
     canAutoReplaceEditInstruction,
     downstreamH3EditContext,
     editInstructionTemplate,
+    installPromptUndoGuard,
     isLineLeadingOffset,
     isWorkflowSaveShortcut,
     pictureOrdinalFromInputName,
@@ -281,6 +282,28 @@ assert.equal(history.undo(), "a");
 assert.equal(history.redo(), "abc");
 assert.equal(undoDirection({ctrlKey: true, metaKey: false, altKey: false, shiftKey: false, key: "z"}), "undo");
 assert.equal(undoDirection({ctrlKey: true, metaKey: false, altKey: false, shiftKey: true, key: "z"}), "redo");
+
+{
+    let workflowCalls = 0;
+    class FakeChangeTracker {
+        undoRedo() {
+            workflowCalls += 1;
+            return "workflow";
+        }
+    }
+    const editorEvent = {ctrlKey:true, metaKey:false, altKey:false, shiftKey:false, key:"z", editor:true};
+    assert.equal(installPromptUndoGuard(FakeChangeTracker, (event) => event.editor), true);
+    assert.equal(new FakeChangeTracker().undoRedo(editorEvent), true);
+    assert.equal(workflowCalls, 0);
+    assert.equal(new FakeChangeTracker().undoRedo({...editorEvent, editor:false}), "workflow");
+    assert.equal(workflowCalls, 1);
+    assert.equal(new FakeChangeTracker().undoRedo({...editorEvent, key:"s"}), "workflow");
+    assert.equal(workflowCalls, 2);
+    assert.equal(installPromptUndoGuard(FakeChangeTracker, () => false), true);
+    assert.equal(new FakeChangeTracker().undoRedo(editorEvent), true);
+    assert.equal(workflowCalls, 2);
+}
+
 assert.equal(isWorkflowSaveShortcut({ctrlKey:true, metaKey:false, altKey:false, shiftKey:false, key:"s"}), true);
 assert.equal(isWorkflowSaveShortcut({ctrlKey:false, metaKey:true, altKey:false, shiftKey:false, key:"S"}), true);
 assert.equal(isWorkflowSaveShortcut({ctrlKey:true, metaKey:false, altKey:false, shiftKey:true, key:"s"}), false);
@@ -328,6 +351,8 @@ assert.match(source, /if \(!promptIdePreferences\(\)\.markerReplacement\) return
 assert.match(source, /\["historyUndo", "historyRedo"\]\.includes\(event\?\.inputType\)/);
 assert.match(source, /undoDirection\(event\) && !isEditableEventTarget\(event\.target\)/);
 assert.match(source, /if \(isWorkflowSaveShortcut\(event\)\) return;/);
+assert.match(source, /await protectPromptEditorUndo\(\)/);
+assert.match(source, /import\("\/scripts\/changeTracker\.js"\)/);
 assert.match(source, /lineStartTokenCaretOffsetAtPoint\(state\.editor, event\)/);
 assert.match(source, /const CARET_SENTINEL = "\\u200B"/);
 assert.match(source, /isLineLeadingOffset\(text, offset\)/);

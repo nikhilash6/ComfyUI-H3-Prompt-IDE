@@ -85,7 +85,8 @@ symbols, and marker-replacement interactions. When a preferred language is
 set, the paired `<d>[Language] …</d>` span becomes the first matching dialogue
 completion; leave it blank to keep the plain span first. Ctrl/Cmd+Space remains
 available when automatic suggestions are disabled. Native browser text undo
-and redo are always preserved.
+and redo are preserved without allowing ComfyUI's workflow history to consume
+the same shortcut while either editor presentation is focused.
 
 Reference associations use H3's native `<Picture 1>`, `<Video 1>`, and `<Audio 1>` naming. Audio labels must follow native presentation order: connected video soundtracks first, then standalone audio. This standalone editor intentionally does not include Motion Context `@tag` or `@@@@tag` compilation.
 

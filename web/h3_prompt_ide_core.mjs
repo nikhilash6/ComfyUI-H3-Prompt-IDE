@@ -1,7 +1,7 @@
 import {
     H3_ALL_SECTIONS,
     H3_MINIMAX_SPECIAL_TOKENS,
-} from "./h3_prompt_schema_core.mjs?v=0.8.25";
+} from "./h3_prompt_schema_core.mjs?v=0.8.26";
 
 export const H3_EDIT_ENCODER_NODE = "TextEncodeH3Edit";
 export const H3_EDIT_OPTIONS_NODE = "H3EditOptions";
@@ -373,6 +373,31 @@ export function undoDirection(event) {
     if (key === "z") return event.shiftKey ? "redo" : "undo";
     if (key === "y" && !event.shiftKey) return "redo";
     return null;
+}
+
+const PROMPT_UNDO_GUARD = Symbol.for("H3PromptIDE.changeTrackerUndoGuard.v1");
+
+/**
+ * Keep ComfyUI's capture-phase workflow history listener from consuming undo
+ * shortcuts that belong to one of this extension's text editors.
+ *
+ * ComfyUI currently exempts input and textarea elements before calling
+ * ChangeTracker.undoRedo(), but not contenteditable rich-text surfaces. The
+ * listener runs on window before an editor can stop propagation, so guarding
+ * the tracker boundary is the first reliable interception point.
+ */
+export function installPromptUndoGuard(ChangeTracker, shouldKeepTextUndo) {
+    const prototype = ChangeTracker?.prototype;
+    if (!prototype || typeof prototype.undoRedo !== "function") return false;
+    if (prototype[PROMPT_UNDO_GUARD]) return true;
+
+    const workflowUndoRedo = prototype.undoRedo;
+    prototype.undoRedo = function (event) {
+        if (undoDirection(event) && shouldKeepTextUndo?.(event)) return true;
+        return workflowUndoRedo.call(this, event);
+    };
+    Object.defineProperty(prototype, PROMPT_UNDO_GUARD, {value:true});
+    return true;
 }
 
 export function isWorkflowSaveShortcut(event) {

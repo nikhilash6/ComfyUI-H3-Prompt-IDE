@@ -4,24 +4,25 @@ import {
     canAutoReplaceEditInstruction,
     downstreamH3EditContext,
     editInstructionTemplate,
+    installPromptUndoGuard,
     isLineLeadingOffset,
     isWorkflowSaveShortcut,
     PromptUndoHistory,
     referenceFromInputName,
     tokenizePrompt,
     undoDirection,
-} from "./h3_prompt_ide_core.mjs?v=0.8.25";
+} from "./h3_prompt_ide_core.mjs?v=0.8.26";
 import {
     createPromptCompletionController,
     promptBracketReplacementQuery,
     promptRetentionReplacementQuery,
     promptTokenReplacementQuery,
-} from "./h3_prompt_completion_core.mjs?v=0.8.25";
-import {repairLegacyWidgetWidth} from "./h3_legacy_widget_width.mjs?v=0.8.25";
+} from "./h3_prompt_completion_core.mjs?v=0.8.26";
+import {repairLegacyWidgetWidth} from "./h3_legacy_widget_width.mjs?v=0.8.26";
 import {
     H3_PROMPT_IDE_SETTING_DEFINITIONS,
     h3PromptIdePreferences,
-} from "./h3_prompt_ide_settings_core.mjs?v=0.8.25";
+} from "./h3_prompt_ide_settings_core.mjs?v=0.8.26";
 import {
     analyzeH3Prompt,
     effectiveH3Mode,
@@ -29,7 +30,7 @@ import {
     H3_MODES,
     h3ModeLabel,
     insertH3Section,
-} from "./h3_prompt_schema_core.mjs?v=0.8.25";
+} from "./h3_prompt_schema_core.mjs?v=0.8.26";
 
 // Standalone adaptation of the Rich Scene Prompt Editor originally authored
 // for ethanfel/ComfyUI-MiniMaxH3-Contex-Loop. Its rich reference presentation
@@ -62,6 +63,23 @@ function settingValue(id, fallback) {
 
 function promptIdePreferences() {
     return h3PromptIdePreferences(settingValue);
+}
+
+function promptEditorOwnsUndo(event) {
+    const pathTarget = event?.composedPath?.().find?.((item) => item?.closest);
+    const target = pathTarget ?? event?.target ?? document.activeElement;
+    return Boolean(target?.closest?.(".h3ide-editor, .h3ide-plain-editor"));
+}
+
+async function protectPromptEditorUndo() {
+    try {
+        const existing = globalThis.comfyAPI?.changeTracker?.ChangeTracker;
+        const ChangeTracker = existing
+            ?? (await import("/scripts/changeTracker.js")).ChangeTracker;
+        installPromptUndoGuard(ChangeTracker, promptEditorOwnsUndo);
+    } catch (error) {
+        console.warn("[H3 Prompt IDE] Could not isolate prompt undo from workflow undo", error);
+    }
 }
 
 function refreshPromptIdeSettings() {
@@ -1921,7 +1939,8 @@ function mountEditor(node) {
 app.registerExtension({
     name:"h3_prompt_ide.standalone_editor",
     ...(SUPPORTS_DECLARATIVE_SETTINGS ? {settings:PROMPT_IDE_SETTINGS} : {}),
-    setup() {
+    async setup() {
+        await protectPromptEditorUndo();
         if (!SUPPORTS_DECLARATIVE_SETTINGS) {
             for (const setting of PROMPT_IDE_SETTINGS) {
                 app.ui?.settings?.addSetting?.(setting);
